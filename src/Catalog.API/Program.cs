@@ -2,7 +2,12 @@
 
 builder.AddServiceDefaults();
 builder.AddApplicationServices();
+builder.AddDefaultAuthentication();
 builder.Services.AddProblemDetails();
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy(CatalogApi.AdminOnlyPolicyName, policy => policy.RequireRole(CatalogApi.AdminRoleName));
+});
 
 var withApiVersioning = builder.Services.AddApiVersioning(options =>
 {
@@ -16,6 +21,8 @@ var app = builder.Build();
 
 app.MapDefaultEndpoints();
 
+app.UseAuthentication();
+app.UseAuthorization();
 app.UseStatusCodePages();
 
 app.MapCatalogApi();

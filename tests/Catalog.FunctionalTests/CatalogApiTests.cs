@@ -3,6 +3,7 @@ using System.Text.Json;
 using Asp.Versioning;
 using Asp.Versioning.Http;
 using eShop.Catalog.API.Model;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Testing;
 
 namespace eShop.Catalog.FunctionalTests;
@@ -17,10 +18,53 @@ public sealed class CatalogApiTests : IClassFixture<CatalogApiFixture>
         _webApplicationFactory = fixture;
     }
 
-    private HttpClient CreateHttpClient(ApiVersion apiVersion)
+    private HttpClient CreateHttpClient(ApiVersion apiVersion, string? token = TestAuthHandler.AdminToken)
     {
         var handler = new ApiVersionHandler(new QueryStringApiVersionWriter(), apiVersion);
-        return _webApplicationFactory.CreateDefaultClient(handler);
+        var client = _webApplicationFactory.CreateDefaultClient(handler);
+
+        if (!string.IsNullOrWhiteSpace(token))
+        {
+            client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+        }
+
+        return client;
+    }
+
+    private static CatalogItem CreateCatalogItem(int id) => new("AuthZ test item")
+    {
+        Id = id,
+        Description = "AuthZ test description",
+        Price = 12.34m,
+        PictureFileName = null,
+        CatalogTypeId = 8,
+        CatalogType = null,
+        CatalogBrandId = 13,
+        CatalogBrand = null,
+        AvailableStock = 10,
+        RestockThreshold = 1,
+        MaxStockThreshold = 20,
+        OnReorder = false
+    };
+
+    private async Task<CatalogItem> CreateTemporaryCatalogItemAsync(HttpClient client, int id)
+    {
+        var createResponse = await client.PostAsJsonAsync("/api/catalog/items", CreateCatalogItem(id), TestContext.Current.CancellationToken);
+        createResponse.EnsureSuccessStatusCode();
+        return CreateCatalogItem(id);
+    }
+
+    private static void AssertProblemDetailsPayload(string body, int expectedStatus, string expectedDetail)
+    {
+        using var document = JsonDocument.Parse(body);
+        var root = document.RootElement;
+
+        Assert.Equal("https://datatracker.ietf.org/doc/html/rfc9457", root.GetProperty("type").GetString());
+        Assert.False(string.IsNullOrWhiteSpace(root.GetProperty("title").GetString()));
+        Assert.Equal(expectedStatus, root.GetProperty("status").GetInt32());
+        Assert.Equal(expectedDetail, root.GetProperty("detail").GetString());
+        Assert.True(root.TryGetProperty("traceId", out var traceId));
+        Assert.False(string.IsNullOrWhiteSpace(traceId.GetString()));
     }
 
     [Theory]
@@ -218,8 +262,21 @@ public sealed class CatalogApiTests : IClassFixture<CatalogApiFixture>
     {
         var _httpClient = CreateHttpClient(new ApiVersion(version));
 
+        var id = version switch
+        {
+            1.0 => 22001,
+            2.0 => 22002,
+            _ => throw new ArgumentOutOfRangeException(nameof(version), version, null)
+        };
+
+        var bodyContent = CreateCatalogItem(id);
+        bodyContent.PictureFileName = "1.webp";
+
+        var createResponse = await _httpClient.PostAsJsonAsync("/api/catalog/items", bodyContent, TestContext.Current.CancellationToken);
+        createResponse.EnsureSuccessStatusCode();
+
         // Act
-        var response = await _httpClient.GetAsync("api/catalog/items/1/pic", TestContext.Current.CancellationToken);
+        var response = await _httpClient.GetAsync($"api/catalog/items/{id}/pic", TestContext.Current.CancellationToken);
 
         // Arrange
         response.EnsureSuccessStatusCode();
@@ -227,6 +284,9 @@ public sealed class CatalogApiTests : IClassFixture<CatalogApiFixture>
 
         // Assert
         Assert.Equal("image/webp", result);
+
+        var cleanupResponse = await _httpClient.DeleteAsync($"/api/catalog/items/{id}", TestContext.Current.CancellationToken);
+        cleanupResponse.EnsureSuccessStatusCode();
     }
 
     [Theory]
@@ -360,14 +420,16 @@ public sealed class CatalogApiTests : IClassFixture<CatalogApiFixture>
     {
         var _httpClient = CreateHttpClient(new ApiVersion(version));
 
-        var id = version switch {
+        var id = version switch
+        {
             1.0 => 10015,
             2.0 => 10016,
             _ => 0
         };
 
         // Act - 1
-        var bodyContent = new CatalogItem("TestCatalog1") {
+        var bodyContent = new CatalogItem("TestCatalog1")
+        {
             Id = id,
             Description = "Test catalog description 1",
             Price = 11000.08m,
@@ -395,6 +457,106 @@ public sealed class CatalogApiTests : IClassFixture<CatalogApiFixture>
 
     }
 
+    [Fact]
+    public async Task CreateCatalogItemWithoutTokenReturns401()
+    {
+        var httpClient = CreateHttpClient(new ApiVersion(1.0), token: null);
+        var response = await httpClient.PostAsJsonAsync("/api/catalog/items", CreateCatalogItem(21001), TestContext.Current.CancellationToken);
+
+        Assert.Equal(System.Net.HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task CreateCatalogItemWithUserTokenReturns403()
+    {
+        var httpClient = CreateHttpClient(new ApiVersion(1.0), TestAuthHandler.UserToken);
+        var response = await httpClient.PostAsJsonAsync("/api/catalog/items", CreateCatalogItem(21002), TestContext.Current.CancellationToken);
+
+        Assert.Equal(System.Net.HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task CreateCatalogItemWithAdminTokenReturnsSuccess()
+    {
+        var httpClient = CreateHttpClient(new ApiVersion(1.0));
+        var response = await httpClient.PostAsJsonAsync("/api/catalog/items", CreateCatalogItem(21003), TestContext.Current.CancellationToken);
+
+        response.EnsureSuccessStatusCode();
+
+        var cleanupResponse = await httpClient.DeleteAsync("/api/catalog/items/21003", TestContext.Current.CancellationToken);
+        cleanupResponse.EnsureSuccessStatusCode();
+    }
+
+    [Fact]
+    public async Task GetMissingCatalogItemReturnsProblemDetailsWithTraceId()
+    {
+        var httpClient = CreateHttpClient(new ApiVersion(1.0), token: null);
+
+        var response = await httpClient.GetAsync("/api/catalog/items/99999", TestContext.Current.CancellationToken);
+
+        Assert.Equal(System.Net.HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+
+        var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        AssertProblemDetailsPayload(body, StatusCodes.Status404NotFound, "Item with id 99999 was not found.");
+    }
+
+    [Fact]
+    public async Task UpdateCatalogItemWithoutTokenReturns401()
+    {
+        var httpClient = CreateHttpClient(new ApiVersion(2.0), token: null);
+        var response = await httpClient.PutAsJsonAsync("/api/catalog/items/1", CreateCatalogItem(1), TestContext.Current.CancellationToken);
+
+        Assert.Equal(System.Net.HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task UpdateCatalogItemWithUserTokenReturns403()
+    {
+        var httpClient = CreateHttpClient(new ApiVersion(2.0), TestAuthHandler.UserToken);
+        var response = await httpClient.PutAsJsonAsync("/api/catalog/items/1", CreateCatalogItem(1), TestContext.Current.CancellationToken);
+
+        Assert.Equal(System.Net.HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task UpdateCatalogItemWithAdminTokenReturnsSuccess()
+    {
+        var httpClient = CreateHttpClient(new ApiVersion(2.0));
+        var response = await httpClient.PutAsJsonAsync("/api/catalog/items/1", CreateCatalogItem(1), TestContext.Current.CancellationToken);
+
+        response.EnsureSuccessStatusCode();
+    }
+
+    [Fact]
+    public async Task DeleteCatalogItemWithoutTokenReturns401()
+    {
+        var httpClient = CreateHttpClient(new ApiVersion(2.0), token: null);
+        var response = await httpClient.DeleteAsync("/api/catalog/items/1", TestContext.Current.CancellationToken);
+
+        Assert.Equal(System.Net.HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task DeleteCatalogItemWithUserTokenReturns403()
+    {
+        var httpClient = CreateHttpClient(new ApiVersion(2.0), TestAuthHandler.UserToken);
+        var response = await httpClient.DeleteAsync("/api/catalog/items/1", TestContext.Current.CancellationToken);
+
+        Assert.Equal(System.Net.HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task DeleteCatalogItemWithAdminTokenReturnsSuccess()
+    {
+        var httpClient = CreateHttpClient(new ApiVersion(2.0));
+        var temporaryItem = await CreateTemporaryCatalogItemAsync(httpClient, 21004);
+
+        var response = await httpClient.DeleteAsync($"/api/catalog/items/{temporaryItem.Id}", TestContext.Current.CancellationToken);
+
+        response.EnsureSuccessStatusCode();
+    }
+
     [Theory]
     [InlineData(1.0)]
     [InlineData(2.0)]
@@ -402,7 +564,8 @@ public sealed class CatalogApiTests : IClassFixture<CatalogApiFixture>
     {
         var _httpClient = CreateHttpClient(new ApiVersion(version));
 
-        var id = version switch {
+        var id = version switch
+        {
             1.0 => 5,
             2.0 => 6,
             _ => 0

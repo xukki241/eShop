@@ -3,8 +3,13 @@
   "info": {
     "title": "eShop - Catalog HTTP API",
     "description": "The Catalog Microservice HTTP API. This is a Data-Driven/CRUD microservice sample",
-    "version": "2.0"
+    "version": "1.0"
   },
+  "servers": [
+    {
+      "url": "http://localhost:62499/"
+    }
+  ],
   "paths": {
     "/api/catalog/items/by": {
       "get": {
@@ -39,7 +44,7 @@
             "required": true,
             "schema": {
               "type": "string",
-              "example": "2.0"
+              "example": "1.0"
             }
           }
         ],
@@ -97,7 +102,7 @@
             "required": true,
             "schema": {
               "type": "string",
-              "example": "2.0"
+              "example": "1.0"
             }
           }
         ],
@@ -111,6 +116,9 @@
                 }
               }
             }
+          },
+          "404": {
+            "description": "Not Found"
           },
           "400": {
             "description": "Bad Request",
@@ -150,7 +158,7 @@
             "required": true,
             "schema": {
               "type": "string",
-              "example": "2.0"
+              "example": "1.0"
             }
           }
         ],
@@ -160,82 +168,8 @@
           },
           "404": {
             "description": "Not Found"
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
           }
-        },
-        "security": [
-          { }
-        ]
-      },
-      "put": {
-        "tags": [
-          "Items"
-        ],
-        "summary": "Create or replace a catalog item",
-        "description": "Create or replace a catalog item",
-        "operationId": "UpdateItem-V2",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "description": "The id of the catalog item to delete",
-            "required": true,
-            "schema": {
-              "pattern": "^-?(?:0|[1-9]\\d*)$",
-              "type": "integer",
-              "format": "int32"
-            }
-          },
-          {
-            "name": "api-version",
-            "in": "query",
-            "description": "The API version, in the format 'major.minor'.",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "example": "2.0"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CatalogItem"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "description": "Created"
-          },
-          "400": {
-            "description": "Bad Request",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetails"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
-          }
-        },
-        "security": [
-          { }
-        ]
+        }
       }
     },
     "/api/catalog/items/{id}/pic": {
@@ -265,7 +199,7 @@
             "required": true,
             "schema": {
               "type": "string",
-              "example": "2.0"
+              "example": "1.0"
             }
           }
         ],
@@ -357,7 +291,7 @@
             "required": true,
             "schema": {
               "type": "string",
-              "example": "2.0"
+              "example": "1.0"
             }
           }
         ],
@@ -404,7 +338,7 @@
             "required": true,
             "schema": {
               "type": "string",
-              "example": "2.0"
+              "example": "1.0"
             }
           }
         ],
@@ -451,7 +385,7 @@
             "required": true,
             "schema": {
               "type": "string",
-              "example": "2.0"
+              "example": "1.0"
             }
           }
         ],
@@ -478,17 +412,8 @@
                 }
               }
             }
-          },
-          "401": {
-            "description": "Unauthorized"
-          },
-          "403": {
-            "description": "Forbidden"
           }
-        },
-        "security": [
-          { }
-        ]
+        }
       },
       "get": {
         "tags": [
@@ -496,7 +421,134 @@
         ],
         "summary": "List catalog items",
         "description": "Get a paginated list of items in the catalog.",
-        "operationId": "ListItems-V2",
+        "operationId": "ListItems",
+        "parameters": [
+          {
+            "name": "PageSize",
+            "in": "query",
+            "description": "Number of items to return in a single page of results",
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32",
+              "default": 10
+            }
+          },
+          {
+            "name": "PageIndex",
+            "in": "query",
+            "description": "The index of the page of results to return",
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32",
+              "default": 0
+            }
+          },
+          {
+            "name": "api-version",
+            "in": "query",
+            "description": "The API version, in the format 'major.minor'.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "example": "1.0"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedItemsOfCatalogItem"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Items"
+        ],
+        "summary": "Create or replace a catalog item",
+        "description": "Create or replace a catalog item",
+        "operationId": "UpdateItem",
+        "parameters": [
+          {
+            "name": "api-version",
+            "in": "query",
+            "description": "The API version, in the format 'major.minor'.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "example": "1.0"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CatalogItem"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/catalog/items/by/{name}": {
+      "get": {
+        "tags": [
+          "Items"
+        ],
+        "summary": "Get catalog items by name",
+        "description": "Get a paginated list of catalog items with the specified name.",
+        "operationId": "GetItemsByName",
         "parameters": [
           {
             "name": "PageSize",
@@ -528,36 +580,12 @@
           },
           {
             "name": "name",
-            "in": "query",
+            "in": "path",
             "description": "The name of the item to return",
+            "required": true,
             "schema": {
+              "minLength": 1,
               "type": "string"
-            }
-          },
-          {
-            "name": "type",
-            "in": "query",
-            "description": "The type of items to return",
-            "schema": {
-              "pattern": "^-?(?:0|[1-9]\\d*)$",
-              "type": [
-                "integer",
-                "string"
-              ],
-              "format": "int32"
-            }
-          },
-          {
-            "name": "brand",
-            "in": "query",
-            "description": "The brand of items to return",
-            "schema": {
-              "pattern": "^-?(?:0|[1-9]\\d*)$",
-              "type": [
-                "integer",
-                "string"
-              ],
-              "format": "int32"
             }
           },
           {
@@ -567,7 +595,7 @@
             "required": true,
             "schema": {
               "type": "string",
-              "example": "2.0"
+              "example": "1.0"
             }
           }
         ],
@@ -595,14 +623,14 @@
         }
       }
     },
-    "/api/catalog/items/withsemanticrelevance": {
+    "/api/catalog/items/withsemanticrelevance/{text}": {
       "get": {
         "tags": [
           "Search"
         ],
         "summary": "Search catalog for relevant items",
         "description": "Search the catalog for items related to the specified text",
-        "operationId": "GetRelevantItems-V2",
+        "operationId": "GetRelevantItems",
         "parameters": [
           {
             "name": "PageSize",
@@ -634,7 +662,7 @@
           },
           {
             "name": "text",
-            "in": "query",
+            "in": "path",
             "description": "The text string to use when search for related items in the catalog",
             "required": true,
             "schema": {
@@ -649,7 +677,193 @@
             "required": true,
             "schema": {
               "type": "string",
-              "example": "2.0"
+              "example": "1.0"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedItemsOfCatalogItem"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/catalog/items/type/{typeId}/brand/{brandId}": {
+      "get": {
+        "tags": [
+          "Types"
+        ],
+        "summary": "Get catalog items by type and brand",
+        "description": "Get catalog items of the specified type and brand",
+        "operationId": "GetItemsByTypeAndBrand",
+        "parameters": [
+          {
+            "name": "PageSize",
+            "in": "query",
+            "description": "Number of items to return in a single page of results",
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32",
+              "default": 10
+            }
+          },
+          {
+            "name": "PageIndex",
+            "in": "query",
+            "description": "The index of the page of results to return",
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32",
+              "default": 0
+            }
+          },
+          {
+            "name": "typeId",
+            "in": "path",
+            "description": "The type of items to return",
+            "required": true,
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32"
+            }
+          },
+          {
+            "name": "brandId",
+            "in": "path",
+            "description": "The brand of items to return",
+            "required": true,
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32"
+            }
+          },
+          {
+            "name": "api-version",
+            "in": "query",
+            "description": "The API version, in the format 'major.minor'.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "example": "1.0"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedItemsOfCatalogItem"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/catalog/items/type/all/brand/{brandId}": {
+      "get": {
+        "tags": [
+          "Brands"
+        ],
+        "summary": "List catalog items by brand",
+        "description": "Get a list of catalog items for the specified brand",
+        "operationId": "GetItemsByBrand",
+        "parameters": [
+          {
+            "name": "PageSize",
+            "in": "query",
+            "description": "Number of items to return in a single page of results",
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32",
+              "default": 10
+            }
+          },
+          {
+            "name": "PageIndex",
+            "in": "query",
+            "description": "The index of the page of results to return",
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32",
+              "default": 0
+            }
+          },
+          {
+            "name": "brandId",
+            "in": "path",
+            "description": "The brand of items to return",
+            "required": true,
+            "schema": {
+              "pattern": "^-?(?:0|[1-9]\\d*)$",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "format": "int32"
+            }
+          },
+          {
+            "name": "api-version",
+            "in": "query",
+            "description": "The API version, in the format 'major.minor'.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "example": "1.0"
             }
           }
         ],
@@ -896,20 +1110,6 @@
               "null",
               "string"
             ]
-          }
-        }
-      }
-    },
-    "securitySchemes": {
-      "oauth2": {
-        "type": "oauth2",
-        "flows": {
-          "implicit": {
-            "authorizationUrl": "http://localhost:5223/connect/authorize",
-            "tokenUrl": "http://localhost:5223/connect/token",
-            "scopes": {
-              "catalog": "Catalog API"
-            }
           }
         }
       }

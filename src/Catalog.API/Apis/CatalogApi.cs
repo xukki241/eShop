@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Infrastructure;
@@ -9,6 +10,9 @@ namespace eShop.Catalog.API;
 
 public static class CatalogApi
 {
+    public const string AdminOnlyPolicyName = "AdminOnly";
+    public const string AdminRoleName = "admin";
+
     public static IEndpointRouteBuilder MapCatalogApi(this IEndpointRouteBuilder app)
     {
         // RouteGroupBuilder for catalog endpoints
@@ -56,7 +60,7 @@ public static class CatalogApi
             .WithDescription("Search the catalog for items related to the specified text")
             .WithTags("Search");
 
-                // Routes for resolving catalog items using AI.
+        // Routes for resolving catalog items using AI.
         v2.MapGet("/items/withsemanticrelevance", GetItemsBySemanticRelevance)
             .WithName("GetRelevantItems-V2")
             .WithSummary("Search catalog for relevant items")
@@ -76,14 +80,14 @@ public static class CatalogApi
             .WithTags("Brands");
         api.MapGet("/catalogtypes",
             [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest, "application/problem+json")]
-            async (CatalogContext context) => await context.CatalogTypes.OrderBy(x => x.Type).ToListAsync())
+        async (CatalogContext context) => await context.CatalogTypes.OrderBy(x => x.Type).ToListAsync())
             .WithName("ListItemTypes")
             .WithSummary("List catalog item types")
             .WithDescription("Get a list of the types of catalog items")
             .WithTags("Types");
         api.MapGet("/catalogbrands",
             [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest, "application/problem+json")]
-            async (CatalogContext context) => await context.CatalogBrands.OrderBy(x => x.Brand).ToListAsync())
+        async (CatalogContext context) => await context.CatalogBrands.OrderBy(x => x.Brand).ToListAsync())
             .WithName("ListItemBrands")
             .WithSummary("List catalog item brands")
             .WithDescription("Get a list of the brands of catalog items")
@@ -91,20 +95,24 @@ public static class CatalogApi
 
         // Routes for modifying catalog items.
         v1.MapPut("/items", UpdateItemV1)
+            .RequireAuthorization(AdminOnlyPolicyName)
             .WithName("UpdateItem")
             .WithSummary("Create or replace a catalog item")
             .WithDescription("Create or replace a catalog item")
             .WithTags("Items");
         v2.MapPut("/items/{id:int}", UpdateItem)
+            .RequireAuthorization(AdminOnlyPolicyName)
             .WithName("UpdateItem-V2")
             .WithSummary("Create or replace a catalog item")
             .WithDescription("Create or replace a catalog item")
             .WithTags("Items");
         api.MapPost("/items", CreateItem)
+            .RequireAuthorization(AdminOnlyPolicyName)
             .WithName("CreateItem")
             .WithSummary("Create a catalog item")
             .WithDescription("Create a new item in the catalog");
         api.MapDelete("/items/{id:int}", DeleteItemById)
+            .RequireAuthorization(AdminOnlyPolicyName)
             .WithName("DeleteItem")
             .WithSummary("Delete catalog item")
             .WithDescription("Delete the specified catalog item");
@@ -168,23 +176,21 @@ public static class CatalogApi
     }
 
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest, "application/problem+json")]
-    public static async Task<Results<Ok<CatalogItem>, NotFound, BadRequest<ProblemDetails>>> GetItemById(
+    public static async Task<Results<Ok<CatalogItem>, ProblemHttpResult, BadRequest<ProblemDetails>>> GetItemById(
         HttpContext httpContext,
         [AsParameters] CatalogServices services,
         [Description("The catalog item id")] int id)
     {
         if (id <= 0)
         {
-            return TypedResults.BadRequest<ProblemDetails>(new (){
-                Detail = "Id is not valid"
-            });
+            return TypedResults.Problem(CreateProblemDetails(httpContext, StatusCodes.Status400BadRequest, "Invalid catalog item id", "Id is not valid."));
         }
 
         var item = await services.Context.CatalogItems.Include(ci => ci.CatalogBrand).SingleOrDefaultAsync(ci => ci.Id == id);
 
         if (item == null)
         {
-            return TypedResults.NotFound();
+            return TypedResults.Problem(CreateProblemDetails(httpContext, StatusCodes.Status404NotFound, "Catalog item not found", $"Item with id {id} was not found."));
         }
 
         return TypedResults.Ok(item);
@@ -202,7 +208,7 @@ public static class CatalogApi
     [ProducesResponseType<byte[]>(StatusCodes.Status200OK, "application/octet-stream",
         [ "image/png", "image/gif", "image/jpeg", "image/bmp", "image/tiff",
           "image/wmf", "image/jp2", "image/svg+xml", "image/webp" ])]
-    public static async Task<Results<PhysicalFileHttpResult,NotFound>> GetItemPictureById(
+    public static async Task<Results<PhysicalFileHttpResult, NotFound>> GetItemPictureById(
         CatalogContext context,
         IWebHostEnvironment environment,
         [Description("The catalog item id")] int id)
@@ -307,21 +313,19 @@ public static class CatalogApi
         return await GetAllItems(paginationRequest, services, null, null, brandId);
     }
 
-    public static async Task<Results<Created, BadRequest<ProblemDetails>, NotFound<ProblemDetails>>> UpdateItemV1(
+    public static async Task<Results<Created, ProblemHttpResult, BadRequest<ProblemDetails>>> UpdateItemV1(
         HttpContext httpContext,
         [AsParameters] CatalogServices services,
         CatalogItem productToUpdate)
     {
         if (productToUpdate?.Id == null)
         {
-            return TypedResults.BadRequest<ProblemDetails>(new (){
-                Detail = "Item id must be provided in the request body."
-            });
+            return TypedResults.BadRequest(CreateProblemDetails(httpContext, StatusCodes.Status400BadRequest, "Invalid catalog item", "Item id must be provided in the request body."));
         }
         return await UpdateItem(httpContext, productToUpdate.Id, services, productToUpdate);
     }
 
-    public static async Task<Results<Created, BadRequest<ProblemDetails>, NotFound<ProblemDetails>>> UpdateItem(
+    public static async Task<Results<Created, ProblemHttpResult, BadRequest<ProblemDetails>>> UpdateItem(
         HttpContext httpContext,
         [Description("The id of the catalog item to delete")] int id,
         [AsParameters] CatalogServices services,
@@ -331,9 +335,7 @@ public static class CatalogApi
 
         if (catalogItem == null)
         {
-            return TypedResults.NotFound<ProblemDetails>(new (){
-                Detail = $"Item with id {id} not found."
-            });
+            return TypedResults.Problem(CreateProblemDetails(httpContext, StatusCodes.Status404NotFound, "Catalog item not found", $"Item with id {id} not found."));
         }
 
         // Update current product
@@ -401,6 +403,20 @@ public static class CatalogApi
         services.Context.CatalogItems.Remove(item);
         await services.Context.SaveChangesAsync();
         return TypedResults.NoContent();
+    }
+
+    private static ProblemDetails CreateProblemDetails(HttpContext httpContext, int statusCode, string title, string detail)
+    {
+        var problemDetails = new ProblemDetails
+        {
+            Type = "https://datatracker.ietf.org/doc/html/rfc9457",
+            Title = title,
+            Status = statusCode,
+            Detail = detail
+        };
+
+        problemDetails.Extensions["traceId"] = httpContext.TraceIdentifier;
+        return problemDetails;
     }
 
     private static string GetImageMimeTypeFromImageFileExtension(string extension) => extension switch
