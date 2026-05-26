@@ -435,6 +435,49 @@
         }
       }
     },
+    "/api/catalog/auth-check": {
+      "get": {
+        "tags": [
+          "Auth"
+        ],
+        "summary": "Test admin authorization",
+        "description": "Returns 200 OK only for authenticated users in the admin role.",
+        "operationId": "AuthCheck",
+        "parameters": [
+          {
+            "name": "api-version",
+            "in": "query",
+            "description": "The API version, in the format 'major.minor'.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "example": "2.0"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnonymousTypeOfstring"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          { }
+        ]
+      }
+    },
     "/api/catalog/items": {
       "post": {
         "tags": [
@@ -680,6 +723,20 @@
   },
   "components": {
     "schemas": {
+      "AnonymousTypeOfstring": {
+        "required": [
+          "message"
+        ],
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": [
+              "null",
+              "string"
+            ]
+          }
+        }
+      },
       "CatalogBrand": {
         "required": [
           "brand"
@@ -927,6 +984,9 @@
     },
     {
       "name": "Brands"
+    },
+    {
+      "name": "Auth"
     },
     {
       "name": "Search"

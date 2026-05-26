@@ -93,6 +93,13 @@ public static class CatalogApi
             .WithDescription("Get a list of the brands of catalog items")
             .WithTags("Brands");
 
+        api.MapGet("/auth-check", () => TypedResults.Ok(new { Message = "Authorized" }))
+            .RequireAuthorization(AdminOnlyPolicyName)
+            .WithName("AuthCheck")
+            .WithSummary("Test admin authorization")
+            .WithDescription("Returns 200 OK only for authenticated users in the admin role.")
+            .WithTags("Auth");
+
         // Routes for modifying catalog items.
         v1.MapPut("/items", UpdateItemV1)
             .RequireAuthorization(AdminOnlyPolicyName)
